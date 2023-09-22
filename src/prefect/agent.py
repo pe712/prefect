@@ -91,30 +91,19 @@ class PrefectAgent:
             self.default_infrastructure = Process()
             self.default_infrastructure_document_id = None
 
-    async def _filter_queues_by_agent_type(
+    async def _select_default_agent_queues(
         self, queues: List[WorkQueue]
     ) -> List[WorkQueue]:
         """
-        Given a list of WorkQueues, return only those that match the agent's default infrastructure type
+        Select only those WorkQueues that match the default work pool type, "prefect-agent"
         """
-
-        # ensure we have the infra block since we'll need that to parse the infra type
-        if (
-            self.default_infrastructure is None
-            and self.default_infrastructure_document_id
-        ):
-            self.default_infrastructure = await self.client.read_block_document(
-                self.default_infrastructure_document_id
-            )
-
         # get the pools for each matched queue
         wp_filter = WorkPoolFilter(
             name=WorkPoolFilterName(any_=[q.work_pool_name for q in queues])
         )
         matching_pools = set()
         for pool in await self.client.read_work_pools(work_pool_filter=wp_filter):
-            # filter for matching pool types only
-            if self.default_infrastructure.type == pool.type:
+            if pool.type == "prefect-agent":
                 matching_pools.add(pool.name)
 
         return [q for q in queues if q.work_pool_name in matching_pools]
@@ -132,7 +121,7 @@ class PrefectAgent:
                 matched_queues = await self.client.match_work_queues(
                     self.work_queue_prefix
                 )
-                matched_queues = await self._filter_queues_by_agent_type(matched_queues)
+                matched_queues = await self._select_default_agent_queues(matched_queues)
 
             matched_queues = set(q.name for q in matched_queues)
             if matched_queues != self.work_queues:
