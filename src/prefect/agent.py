@@ -92,7 +92,7 @@ class PrefectAgent:
             self.default_infrastructure_document_id = None
 
     async def _select_default_agent_queues(
-        self, queues: List[WorkQueue]
+        self, client: PrefectClient, queues: List[WorkQueue]
     ) -> List[WorkQueue]:
         """
         Select only those WorkQueues that match the default work pool type, "prefect-agent"
@@ -102,7 +102,7 @@ class PrefectAgent:
             name=WorkPoolFilterName(any_=[q.work_pool_name for q in queues])
         )
         matching_pools = set()
-        for pool in await self.client.read_work_pools(work_pool_filter=wp_filter):
+        for pool in await client.read_work_pools(work_pool_filter=wp_filter):
             if pool.type == "prefect-agent":
                 matching_pools.add(pool.name)
 
@@ -121,7 +121,9 @@ class PrefectAgent:
                 matched_queues = await self.client.match_work_queues(
                     self.work_queue_prefix
                 )
-                matched_queues = await self._select_default_agent_queues(matched_queues)
+                matched_queues = await self._select_default_agent_queues(
+                    self.client, matched_queues
+                )
 
             matched_queues = set(q.name for q in matched_queues)
             if matched_queues != self.work_queues:

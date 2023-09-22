@@ -10,6 +10,7 @@ from prefect import flow
 from prefect.agent import PrefectAgent
 from prefect.blocks.core import Block
 from prefect.client.orchestration import PrefectClient
+from prefect.client.schemas.actions import WorkPoolCreate
 from prefect.exceptions import Abort, CrashedRun, FailedRun
 from prefect.infrastructure.base import Infrastructure
 from prefect.server import models, schemas
@@ -1216,3 +1217,25 @@ async def test_agent_runs_high_priority_flow_runs_first(
 
     submitted_flow_run_ids = {flow_run.id for flow_run in submitted_flow_runs}
     assert submitted_flow_run_ids == {flow_run_ids[3]}
+
+
+async def test_select_default_agent_queues_only_returns_default_queues(
+    prefect_client: PrefectClient,
+):
+    prod1 = "prod-deployment-1"
+    prod2 = "prod-deployment-2"
+
+    p1 = await prefect_client.create_work_pool(
+        WorkPoolCreate(name="testing", type="ecs")
+    )
+    p2 = await prefect_client.create_work_pool(
+        WorkPoolCreate(name="test", type="prefect-agent")
+    )
+    q1 = await prefect_client.create_work_queue(name=prod1, work_pool_name=p1.name)
+    q2 = await prefect_client.create_work_queue(name=prod2, work_pool_name=p2.name)
+
+    agent = PrefectAgent(work_queues=[q1.name, q2.name], prefetch_seconds=10)
+    results = await agent._select_default_agent_queues(prefect_client, [q1, q2])
+
+    # verify we only selected the queue with the default "prefect-agent" work pool
+    assert results == [q2]
